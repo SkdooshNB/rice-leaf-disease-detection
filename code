@@ -1,0 +1,211 @@
+
+
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import theano
+from numpy import *
+from PIL import Image
+import cv2
+
+from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
+
+import keras
+from keras.utils import np_utils
+from keras.models import Sequential
+from keras.layers.core import Dense, Dropout, Activation, Flatten
+from keras.layers.convolutional import Convolution2D, MaxPooling2D
+from keras.optimizers import Adam
+from keras.optimizers import adadelta
+
+
+path1=r"C:\Users\bhoi\Desktop\AI&ML\rice\Bacterial leaf blight"
+path2=r"C:\Users\bhoi\Desktop\AI&ML\rice\Brown spot"
+path3=r"C:\Users\bhoi\Desktop\AI&ML\rice\Leaf smut"
+
+path4=r"C:\Users\bhoi\Desktop\AI&ML\input_data_resized"
+
+listing1=os.listdir(path1)
+listing2=os.listdir(path2)
+listing3=os.listdir(path3)
+'''
+img=cv2.imread(r"C:\Users\bhoi\Desktop\AI&ML\rice\Bacterial leaf blight\DSC_1.JPG")
+img.resize(300,300)
+plt.imshow(img)
+'''
+img_rows,img_cols=200,200
+
+#putting all images to one folder
+for file in listing1:
+    path=path1 +'\\' + file
+    im=Image.open(path)
+    img=im.resize((img_rows,img_cols))
+    gray=img.convert('L')
+    gray.save(path4 + '\\' + file,"JPEG")
+    
+for file in listing2:
+    path=path2 +'\\' + file
+    im=Image.open(path)
+    img=im.resize((img_rows,img_cols))
+    gray=img.convert('L')  #->convert RGB to Gray channel
+    gray.save(path4 + '\\' + file,"JPEG")
+    
+for file in listing3:
+    path=path3 +'\\' + file
+    im=Image.open(path)
+    img=im.resize((img_rows,img_cols))
+    gray=img.convert('L')
+    gray.save(path4 + '\\' + file,"JPEG")
+    
+    
+
+num1=size(listing1)
+print("size of 1st file:",num1)
+num2=size(listing2)
+print("size of 2nd file:",num1)
+num3=size(listing3)
+print("size of 3rd file:",num1)
+'''
+df1=pd.DataFrame(listing1)
+df2=pd.DataFrame(listing2)
+df3=pd.DataFrame(listing3)
+'''
+df=os.listdir(path4)
+num_of_samples=size(df)
+im1=array(Image.open('input_data_resized' + '\\' +df[0]))
+m,n=im1.shape[0:2] #pixel value
+#converting all images to array format
+im_matrix=array([array(Image.open(path4 + '\\' + im2)).flatten()
+                 for im2 in df],'f')
+
+op_classes={0:"Bacterial leaf blight",1:"Brown spot",2:"Leaf smut"}
+labels=np.ones((num_of_samples),dtype='int')
+labels[0:40]=0
+labels[40:80]=1
+labels[80:]=2
+    
+data,labels=shuffle(im_matrix,labels,random_state=2)
+
+train_data=[data,labels]
+#plotting one image 
+img=im_matrix[2].reshape(img_rows,img_cols)
+plt.imshow(img)
+plt.imshow(img,cmap='gray')
+
+print(train_data[0].shape)
+print(train_data[1].shape)
+
+
+batch_size=5
+nb_classes=3
+nb_epoch=30
+image_channels=1
+nb_filters=32
+nb_pool=2
+nb_conv=5
+
+(X,y)=(train_data[0],train_data[1])
+
+X_train,X_test,y_train,y_test= train_test_split(X,y,test_size=0.25,
+                                               random_state=2)
+########
+X_train=X_train.reshape(X_train.shape[0],1,img_rows,img_cols)
+#######
+X_test=X_test.reshape(X_test.shape[0],1,img_rows,img_cols)
+
+X_train=X_train.astype('float32')
+X_test=X_test.astype('float32')
+
+X_train/=255
+X_test/=255
+
+input_shape=X_train[0].shape
+
+print(X_train.shape,'X_train.shape')
+print(X_train.shape[0],'train sample')
+print(X_test.shape[0],'test sample')
+
+
+y_train=np_utils.to_categorical(y_train,nb_classes)
+y_test=np_utils.to_categorical(y_test,nb_classes)
+
+#checking from test set
+i=50
+plt.imshow(X_train[i,0],interpolation='nearest')
+print('lebel:',y_train[i,:])
+
+X_train[0].shape
+#model
+model=Sequential()
+model.add(Convolution2D(nb_filters,(nb_conv,nb_conv),border_mode='valid',
+                        input_shape=(1,200,200),data_format='channels_first'))
+convout1=Activation('relu')#1st layer activation funcn relu
+model.add(convout1)
+
+model.add(Convolution2D(nb_filters,nb_conv,nb_conv))
+convout2=Activation('relu')#2nd layer activation funcn relu
+model.add(convout2)
+#adding pooling lAYER
+model.add(MaxPooling2D(pool_size=(nb_pool,nb_pool)))
+#adding dropout
+model.add(Dropout(0.5))
+
+model.add(Flatten())
+model.add(Dense(128))
+convout3=Activation('relu')
+model.add(convout3)
+model.add(Dropout(0.5))
+#output layer
+model.add(Dense(nb_classes))
+model.add(Activation('softmax'))
+model.compile(adadelta(lr=0.50),loss='categorical_crossentropy',
+              metrics=['accuracy'])
+
+model.summary()
+
+#model.fit(X_train,y_train,batch_size=30,nb_epoch=20,
+ #         verbose=1,validation_data=(X_test,y_test))
+
+h=model.fit(X_train,y_train,batch_size=2,nb_epoch=30,
+          verbose=1,shuffle=1,validation_data=(X_test,y_test))
+
+
+score=model.evaluate(X_test,y_test,verbose=0)
+print('Train accuracy:',score[0])
+print('Test accuracy:',score[1])
+
+#plotting the graph of loss
+plt.plot(h.history['loss'],label='loss')
+plt.plot(h.history['val_loss'],label='val_loss')
+plot.title('loss')
+plt.xlabel('epoch')
+plt.legend()
+plt.show()
+
+
+
+
+#do prediction
+print(model.predict_classes(X_test[11:20]))
+print(y_test[11:20])
+
+#testing another image
+
+
+
+path=r"C:\Users\bhoi\Desktop\AI&ML\rice\Leaf smut\DSC_311.jpg"
+img=Image.open(path)
+plt.imshow(img)
+img=np.asarray(img)
+img=cv2.resize(img,(200,200))
+img=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+plt.imshow(img)
+img=img/255
+im=img.reshape(1,1,200,200)
+p=model.predict_classes(im)
+print(p[0])
+
+
+print("predicted class:",op_classes[p[0]])
